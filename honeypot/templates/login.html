@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PHANTOM GRID — ACCESS CONTROL</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--c-bg:#020912;--c-panel:#040e1f;--c-border:#0d2d55;--c-accent:#00e5ff;--c-accent2:#ff3d71;--c-text:#8cb8d4;--c-bright:#e0f4ff;--c-green:#00ff88;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--c-bg);color:var(--c-text);font-family:'Share Tech Mono',monospace;min-height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+  canvas{position:fixed;inset:0;z-index:0;opacity:.35;}
+  .grid-bg{position:fixed;inset:0;background-image:linear-gradient(rgba(0,229,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,255,.025) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:1;}
+  .container{position:relative;z-index:10;width:420px;}
+  .logo{text-align:center;margin-bottom:36px;}
+  .logo-pre{font-size:10px;color:var(--c-accent);letter-spacing:.2em;opacity:.7;}
+  .logo h1{font-family:'Rajdhani',sans-serif;font-size:48px;font-weight:700;color:var(--c-bright);letter-spacing:.06em;line-height:1;margin:6px 0 4px;}
+  .logo h1 em{color:var(--c-accent);font-style:normal;}
+  .logo-sub{font-size:10px;letter-spacing:.3em;color:var(--c-text);}
+  .panel{background:rgba(4,14,31,.95);border:1px solid var(--c-border);padding:32px;position:relative;backdrop-filter:blur(4px);}
+  .panel::before{content:'';position:absolute;top:-1px;left:16px;right:16px;height:2px;background:linear-gradient(90deg,transparent,var(--c-accent) 50%,transparent);}
+  .corner{position:absolute;width:10px;height:10px;border-color:var(--c-accent);border-style:solid;}
+  .corner.tl{top:5px;left:5px;border-width:1px 0 0 1px;}
+  .corner.tr{top:5px;right:5px;border-width:1px 1px 0 0;}
+  .corner.bl{bottom:5px;left:5px;border-width:0 0 1px 1px;}
+  .corner.br{bottom:5px;right:5px;border-width:0 1px 1px 0;}
+  .panel-title{font-size:10px;letter-spacing:.25em;color:var(--c-accent);margin-bottom:28px;text-align:center;text-transform:uppercase;}
+  .field{margin-bottom:20px;}
+  label{display:block;font-size:9px;letter-spacing:.25em;color:var(--c-text);margin-bottom:8px;text-transform:uppercase;}
+  input{width:100%;background:rgba(0,229,255,.03);border:1px solid rgba(13,45,85,.8);color:var(--c-bright);font-family:'Share Tech Mono',monospace;font-size:14px;padding:12px 14px;outline:none;transition:border-color .2s,box-shadow .2s;}
+  input:focus{border-color:var(--c-accent);box-shadow:0 0 12px rgba(0,229,255,.12);}
+  .btn{width:100%;background:rgba(0,229,255,.06);border:1px solid var(--c-accent);color:var(--c-accent);font-family:'Share Tech Mono',monospace;font-size:12px;letter-spacing:.2em;padding:14px;cursor:pointer;transition:all .25s;text-transform:uppercase;margin-top:8px;position:relative;overflow:hidden;}
+  .btn:hover{background:rgba(0,229,255,.12);box-shadow:0 0 24px rgba(0,229,255,.2),inset 0 0 24px rgba(0,229,255,.04);}
+  .btn::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent 0%,rgba(0,229,255,.08) 50%,transparent 100%);transform:translateX(-100%);transition:transform .4s;}
+  .btn:hover::after{transform:translateX(100%);}
+  .error{color:var(--c-accent2);font-size:11px;letter-spacing:.08em;margin-bottom:18px;padding:10px 12px;border:1px solid rgba(255,61,113,.25);background:rgba(255,61,113,.06);display:flex;align-items:center;gap:8px;}
+  .status-row{display:flex;justify-content:space-between;margin-top:24px;padding-top:16px;border-top:1px solid var(--c-border);}
+  .status-item{font-size:9px;letter-spacing:.1em;color:var(--c-text);}
+  .status-item span{color:var(--c-green);}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="grid-bg"></div>
+<div class="container">
+  <div class="logo">
+    <div class="logo-pre">◈ SYSTEM ONLINE ◈</div>
+    <h1>PHANTOM<em>GRID</em></h1>
+    <div class="logo-sub">OPERATOR AUTHENTICATION REQUIRED</div>
+  </div>
+  <div class="panel">
+    <div class="corner tl"></div><div class="corner tr"></div>
+    <div class="corner bl"></div><div class="corner br"></div>
+    <div class="panel-title">▸ SECURE ACCESS PORTAL</div>
+    {% if error %}<div class="error">⬡ {{ error }}</div>{% endif %}
+    <form method="post">
+      <div class="field">
+        <label>Operator ID</label>
+        <input name="username" type="text" autocomplete="off" placeholder="_ _ _ _ _ _ _ _" required>
+      </div>
+      <div class="field">
+        <label>Auth Token</label>
+        <input name="password" type="password" placeholder="••••••••••••" required>
+      </div>
+      <button class="btn" type="submit">▶ AUTHENTICATE</button>
+    </form>
+    <div class="status-row">
+      <div class="status-item">SYSTEM: <span>ACTIVE</span></div>
+      <div class="status-item">THREAT LEVEL: <span>MONITORING</span></div>
+      <div class="status-item">UPLINK: <span>SECURE</span></div>
+    </div>
+  </div>
+</div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d');
+let W,H,drops=[];
+function init(){W=c.width=window.innerWidth;H=c.height=window.innerHeight;const cols=Math.floor(W/18);drops=Array.from({length:cols},()=>Math.random()*H/14|0);}
+function draw(){ctx.fillStyle='rgba(2,9,18,.05)';ctx.fillRect(0,0,W,H);ctx.fillStyle='rgba(0,229,255,0.5)';ctx.font='13px Share Tech Mono';const chars='01アイウエオカキクケコSYSTEM>_PHANTOM';drops.forEach((y,i)=>{ctx.fillText(chars[Math.floor(Math.random()*chars.length)],i*18,y*14);if(y*14>H&&Math.random()>.975)drops[i]=0;else drops[i]++;});}
+init();window.addEventListener('resize',init);
+setInterval(draw,60);
+</script>
+</body>
+</html>

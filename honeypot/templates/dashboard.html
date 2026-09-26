@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PHANTOM GRID — COMMAND CENTER</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.min.js"></script>
+<style>
+:root{
+  --bg:#020912; --panel:#040e1f; --panel2:#050f20; --border:#0d2d55; --border2:#0a2240;
+  --accent:#00e5ff; --accent2:#ff3d71; --accent3:#a855f7; --green:#00ff88;
+  --warn:#ffcc00; --text:#8cb8d4; --bright:#e0f4ff; --dim:#3a5a72;
+  --proto-http:#00e5ff; --proto-ftp:#a855f7; --proto-ssh:#00ff88;
+  --proto-snmp:#ffcc00; --proto-smb:#ff3d71; --proto-telnet:#ff8c00; --proto-smtp:#64b5f6;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100%;overflow:hidden;}
+body{background:var(--bg);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:13px;}
+
+/* ── GRID BACKGROUND ── */
+.grid-bg{position:fixed;inset:0;z-index:0;
+  background-image:linear-gradient(rgba(0,229,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,255,.025) 1px,transparent 1px);
+  background-size:40px 40px;pointer-events:none;}
+.scanline{position:fixed;inset:0;z-index:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,.08) 3px,rgba(0,0,0,.08) 4px);
+  pointer-events:none;}
+
+/* ── LAYOUT ── */
+.root{position:relative;z-index:1;height:100vh;display:grid;
+  grid-template-rows:52px 1fr;grid-template-columns:1fr;gap:0;}
+
+/* ── TOPBAR ── */
+.topbar{display:flex;align-items:center;padding:0 20px;gap:20px;
+  background:rgba(4,14,31,.95);border-bottom:1px solid var(--border);
+  position:relative;}
+.topbar::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--accent),transparent);}
+.logo{font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;color:var(--bright);letter-spacing:.06em;white-space:nowrap;}
+.logo em{color:var(--accent);font-style:normal;}
+.topbar-center{flex:1;display:flex;align-items:center;justify-content:center;gap:24px;}
+.sys-stat{font-size:10px;letter-spacing:.15em;display:flex;align-items:center;gap:6px;}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:blink 1.4s ease-in-out infinite;}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:.3;}}
+.dot.warn{background:var(--warn);box-shadow:0 0 8px var(--warn);}
+.dot.red{background:var(--accent2);box-shadow:0 0 8px var(--accent2);}
+.topbar-right{display:flex;align-items:center;gap:16px;}
+.clock{font-size:12px;color:var(--accent);letter-spacing:.1em;}
+.btn-sm{background:transparent;border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:.15em;padding:6px 12px;cursor:pointer;transition:all .2s;text-transform:uppercase;}
+.btn-sm:hover{border-color:var(--accent);color:var(--accent);}
+.btn-sm.danger:hover{border-color:var(--accent2);color:var(--accent2);}
+
+/* ── BODY ── */
+.body{display:grid;grid-template-columns:260px 1fr 320px;grid-template-rows:1fr;gap:1px;overflow:hidden;background:var(--border2);}
+
+/* ── LEFT PANEL: PROTOCOLS ── */
+.proto-panel{background:var(--panel);display:flex;flex-direction:column;overflow:hidden;}
+.p-section{padding:12px 14px;border-bottom:1px solid var(--border);}
+.p-section-title{font-size:9px;letter-spacing:.25em;color:var(--accent);margin-bottom:10px;text-transform:uppercase;display:flex;align-items:center;gap:6px;}
+.p-section-title::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* Protocol cards */
+.proto-list{flex:1;overflow-y:auto;padding:10px;}
+.proto-list::-webkit-scrollbar{width:4px;}
+.proto-list::-webkit-scrollbar-track{background:transparent;}
+.proto-list::-webkit-scrollbar-thumb{background:var(--border);}
+.proto-card{border:1px solid var(--border);margin-bottom:8px;padding:10px 12px;position:relative;transition:border-color .2s;cursor:default;}
+.proto-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;}
+.proto-card.running::before{background:var(--green);}
+.proto-card.stopped::before{background:var(--dim);}
+.proto-card.error::before{background:var(--accent2);}
+.proto-card:hover{border-color:rgba(0,229,255,.3);}
+.pc-header{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.pc-name{font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:600;letter-spacing:.08em;}
+.pc-port{font-size:9px;color:var(--dim);margin-left:auto;}
+.pc-status{font-size:9px;letter-spacing:.12em;text-transform:uppercase;margin-bottom:6px;}
+.pc-status.running{color:var(--green);}
+.pc-status.stopped{color:var(--dim);}
+.pc-status.error{color:var(--accent2);}
+.pc-banner{font-size:9px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:8px;}
+.pc-controls{display:flex;gap:6px;}
+.pc-btn{flex:1;background:transparent;border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:.12em;padding:5px 4px;cursor:pointer;transition:all .15s;text-transform:uppercase;}
+.pc-btn.start:hover{border-color:var(--green);color:var(--green);}
+.pc-btn.stop:hover{border-color:var(--accent2);color:var(--accent2);}
+.pc-btn.banner-btn:hover{border-color:var(--accent3);color:var(--accent3);}
+
+/* ── CENTER: MAIN FEED ── */
+.main-panel{background:var(--panel);display:grid;grid-template-rows:auto 1fr auto;overflow:hidden;}
+
+/* 3D globe + stats row */
+.stats-bar{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--border);height:80px;}
+.stat-box{border-right:1px solid var(--border);padding:12px 16px;display:flex;flex-direction:column;justify-content:space-between;}
+.stat-box:last-child{border-right:none;}
+.stat-label{font-size:9px;letter-spacing:.2em;color:var(--dim);text-transform:uppercase;}
+.stat-value{font-family:'Rajdhani',sans-serif;font-size:28px;font-weight:700;color:var(--bright);line-height:1;}
+.stat-value.accent{color:var(--accent);}
+.stat-value.warn{color:var(--warn);}
+.stat-value.red{color:var(--accent2);}
+.stat-delta{font-size:9px;color:var(--green);}
+
+/* Globe canvas area */
+.globe-row{height:200px;border-bottom:1px solid var(--border);position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+.globe-row canvas{position:absolute;}
+.globe-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;}
+.globe-label{position:absolute;top:12px;left:16px;font-size:9px;letter-spacing:.2em;color:var(--accent);text-transform:uppercase;}
+.globe-label-r{position:absolute;top:12px;right:16px;font-size:9px;letter-spacing:.1em;color:var(--dim);}
+
+/* Log feed */
+.log-feed{overflow-y:auto;padding:4px 0;}
+.log-feed::-webkit-scrollbar{width:4px;}
+.log-feed::-webkit-scrollbar-thumb{background:var(--border);}
+.log-entry{display:grid;grid-template-columns:70px 70px 90px 1fr;gap:10px;padding:5px 16px;border-bottom:1px solid rgba(13,45,85,.4);transition:background .2s;align-items:start;}
+.log-entry:hover{background:rgba(0,229,255,.03);}
+.log-entry.new{animation:flashin .4s ease-out;}
+@keyframes flashin{0%{background:rgba(0,229,255,.12);}100%{background:transparent;}}
+.le-time{color:var(--dim);font-size:11px;white-space:nowrap;}
+.le-sev{font-size:9px;letter-spacing:.1em;text-transform:uppercase;padding:1px 5px;border-radius:0;font-weight:bold;}
+.le-sev.CRITICAL{color:var(--accent2);border:1px solid rgba(255,61,113,.4);}
+.le-sev.HIGH{color:var(--warn);border:1px solid rgba(255,204,0,.4);}
+.le-sev.MEDIUM{color:var(--accent);border:1px solid rgba(0,229,255,.3);}
+.le-sev.LOW{color:var(--dim);border:1px solid var(--border);}
+.le-proto{font-size:10px;letter-spacing:.1em;font-weight:bold;}
+.le-msg{color:var(--bright);font-size:11px;word-break:break-all;line-height:1.4;}
+
+/* Log toolbar */
+.log-toolbar{display:flex;align-items:center;gap:8px;padding:8px 16px;border-top:1px solid var(--border);background:rgba(2,9,18,.6);}
+.filter-btn{background:transparent;border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:.12em;padding:4px 10px;cursor:pointer;transition:all .15s;text-transform:uppercase;}
+.filter-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(0,229,255,.06);}
+.log-toolbar-right{margin-left:auto;display:flex;gap:8px;}
+
+/* ── RIGHT PANEL ── */
+.right-panel{background:var(--panel2);display:flex;flex-direction:column;overflow:hidden;}
+
+/* Attack chart */
+.chart-section{border-bottom:1px solid var(--border);padding:0;}
+.r-title{font-size:9px;letter-spacing:.2em;color:var(--accent);padding:10px 14px 6px;text-transform:uppercase;border-bottom:1px solid var(--border);}
+.mini-chart{height:80px;padding:8px 14px;display:flex;align-items:flex-end;gap:3px;}
+.bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;}
+.bar{width:100%;background:rgba(0,229,255,.15);border-top:1px solid var(--accent);transition:height .3s ease;min-height:2px;}
+.bar-lbl{font-size:8px;color:var(--dim);}
+
+/* IP table */
+.ip-table{padding:10px 14px;flex-shrink:0;}
+.ip-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(13,45,85,.4);}
+.ip-row:last-child{border-bottom:none;}
+.ip-addr{color:var(--bright);font-size:11px;flex:1;}
+.ip-count{font-size:11px;color:var(--accent);}
+.ip-bar{height:2px;background:linear-gradient(90deg,var(--accent),transparent);margin-top:3px;}
+
+/* Banner editor modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(2,9,18,.85);z-index:100;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--panel);border:1px solid var(--border);width:560px;position:relative;}
+.modal::before{content:'';position:absolute;top:-1px;left:20px;right:20px;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);}
+.modal-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border);}
+.modal-title{font-family:'Rajdhani',sans-serif;font-size:16px;font-weight:600;color:var(--bright);letter-spacing:.06em;}
+.modal-close{background:none;border:none;color:var(--text);font-size:18px;cursor:pointer;}
+.modal-close:hover{color:var(--accent2);}
+.modal-body{padding:16px;}
+.m-label{font-size:9px;letter-spacing:.2em;color:var(--text);margin-bottom:8px;text-transform:uppercase;}
+.m-input{width:100%;background:rgba(0,229,255,.03);border:1px solid var(--border);color:var(--bright);font-family:'Share Tech Mono',monospace;font-size:12px;padding:10px 12px;outline:none;margin-bottom:12px;transition:border-color .2s;}
+.m-input:focus{border-color:var(--accent);}
+.preset-list{display:flex;flex-direction:column;gap:4px;margin-bottom:14px;max-height:200px;overflow-y:auto;}
+.preset-item{padding:8px 10px;border:1px solid var(--border);cursor:pointer;font-size:10px;transition:all .15s;}
+.preset-item:hover{border-color:var(--accent);background:rgba(0,229,255,.04);}
+.preset-item .pi-label{color:var(--bright);margin-bottom:2px;}
+.preset-item .pi-val{color:var(--dim);font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.modal-footer{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--border);}
+.m-btn{flex:1;background:transparent;border:1px solid;font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:.15em;padding:10px;cursor:pointer;transition:all .2s;text-transform:uppercase;}
+.m-btn.primary{border-color:var(--accent);color:var(--accent);}
+.m-btn.primary:hover{background:rgba(0,229,255,.1);}
+.m-btn.cancel{border-color:var(--border);color:var(--dim);}
+
+/* Alert toast */
+.toast-area{position:fixed;top:60px;right:16px;z-index:200;display:flex;flex-direction:column;gap:6px;pointer-events:none;}
+.toast{background:rgba(4,14,31,.95);border-left:3px solid;padding:10px 14px;font-size:11px;max-width:320px;animation:toastin .25s ease-out;pointer-events:auto;}
+@keyframes toastin{from{opacity:0;transform:translateX(20px);}to{opacity:1;transform:none;}}
+.toast.CRITICAL{border-color:var(--accent2);color:var(--accent2);}
+.toast.HIGH{border-color:var(--warn);color:var(--warn);}
+.toast.MEDIUM{border-color:var(--accent);color:var(--accent);}
+
+/* proto colors */
+.pc-http,.le-proto.http{color:var(--proto-http);}
+.pc-ftp,.le-proto.ftp{color:var(--proto-ftp);}
+.pc-ssh,.le-proto.ssh{color:var(--proto-ssh);}
+.pc-snmp,.le-proto.snmp{color:var(--proto-snmp);}
+.pc-smb,.le-proto.smb{color:var(--proto-smb);}
+.pc-telnet,.le-proto.telnet{color:var(--proto-telnet);}
+.pc-smtp,.le-proto.smtp{color:var(--proto-smtp);}
+
+/* Scrollbars */
+.right-panel::-webkit-scrollbar,.proto-list::-webkit-scrollbar{width:3px;}
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+<div class="scanline"></div>
+
+<!-- TOAST AREA -->
+<div class="toast-area" id="toastArea"></div>
+
+<!-- BANNER EDITOR MODAL -->
+<div class="modal-overlay" id="bannerModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">◈ BANNER EDITOR — <span id="bannerProtoName">HTTP</span></span>
+      <button class="modal-close" onclick="closeBannerModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="m-label">Current Banner String</div>
+      <input type="text" class="m-input" id="bannerInput" placeholder="Enter banner string...">
+      <div class="m-label">Predefined Vulnerable Banners</div>
+      <div class="preset-list" id="presetList"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="m-btn cancel" onclick="closeBannerModal()">Cancel</button>
+      <button class="m-btn primary" onclick="saveBanner()">▶ APPLY BANNER</button>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN LAYOUT -->
+<div class="root">
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="logo">PHANTOM<em>GRID</em></div>
+    <div class="topbar-center">
+      <div class="sys-stat"><div class="dot" id="sysDot"></div><span id="sysStatusText">SYSTEM ONLINE</span></div>
+      <div class="sys-stat"><div class="dot warn"></div><span id="activeProtos">0 PROTOCOLS ACTIVE</span></div>
+      <div class="sys-stat"><div class="dot red"></div><span id="totalHits">0 TOTAL HITS</span></div>
+    </div>
+    <div class="topbar-right">
+      <div class="clock" id="clock">--:--:--</div>
+      <button class="btn-sm" onclick="exportLogs('json')">⬇ JSON</button>
+      <button class="btn-sm" onclick="exportLogs('csv')">⬇ CSV</button>
+      <button class="btn-sm" onclick="exportLogs('txt')">⬇ TXT</button>
+      <button class="btn-sm danger" onclick="clearLogs()">✕ CLEAR</button>
+      <a href="/logout"><button class="btn-sm danger">⏻ LOGOUT</button></a>
+    </div>
+  </div>
+
+  <!-- BODY -->
+  <div class="body">
+    <!-- LEFT: PROTOCOLS -->
+    <div class="proto-panel">
+      <div class="p-section">
+        <div class="p-section-title">◉ PROTOCOL SENSORS</div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn-sm" style="flex:1" onclick="toggleAll('start')">▶ ALL ON</button>
+          <button class="btn-sm danger" style="flex:1" onclick="toggleAll('stop')">■ ALL OFF</button>
+        </div>
+      </div>
+      <div class="proto-list" id="protoList"></div>
+    </div>
+
+    <!-- CENTER: FEED -->
+    <div class="main-panel">
+      <!-- Stats -->
+      <div class="stats-bar">
+        <div class="stat-box"><div class="stat-label">TOTAL EVENTS</div><div class="stat-value accent" id="statTotal">0</div><div class="stat-delta">▲ LIVE FEED</div></div>
+        <div class="stat-box"><div class="stat-label">UNIQUE IPs</div><div class="stat-value" id="statIPs">0</div><div class="stat-delta">ATTACKERS</div></div>
+        <div class="stat-box"><div class="stat-label">CRITICAL ALERTS</div><div class="stat-value red" id="statCrit">0</div><div class="stat-delta">SSH + SMB</div></div>
+        <div class="stat-box"><div class="stat-label">ACTIVE SENSORS</div><div class="stat-value warn" id="statActive">0</div><div class="stat-delta">PROTOCOLS</div></div>
+      </div>
+
+      <!-- Globe visualization -->
+      <div class="globe-row">
+        <canvas id="globeCanvas"></canvas>
+        <div class="globe-label">◈ THREAT RADAR</div>
+        <div class="globe-label-r" id="radarStatus">SCANNING...</div>
+      </div>
+
+      <!-- Log feed -->
+      <div class="log-feed" id="logFeed"></div>
+
+      <!-- Log toolbar -->
+      <div class="log-toolbar">
+        <button class="filter-btn active" onclick="setFilter('all',this)">ALL</button>
+        <button class="filter-btn" onclick="setFilter('http',this)" style="color:var(--proto-http)">HTTP</button>
+        <button class="filter-btn" onclick="setFilter('ftp',this)" style="color:var(--proto-ftp)">FTP</button>
+        <button class="filter-btn" onclick="setFilter('ssh',this)" style="color:var(--proto-ssh)">SSH</button>
+        <button class="filter-btn" onclick="setFilter('snmp',this)" style="color:var(--proto-snmp)">SNMP</button>
+        <button class="filter-btn" onclick="setFilter('smb',this)" style="color:var(--proto-smb)">SMB</button>
+        <button class="filter-btn" onclick="setFilter('telnet',this)" style="color:var(--proto-telnet)">TELNET</button>
+        <button class="filter-btn" onclick="setFilter('smtp',this)" style="color:var(--proto-smtp)">SMTP</button>
+        <div class="log-toolbar-right">
+          <span style="font-size:9px;color:var(--dim);" id="logCount">0 events</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: STATS -->
+    <div class="right-panel">
+      <div class="r-title">◈ ACTIVITY TIMELINE (60s)</div>
+      <div class="mini-chart" id="miniChart"></div>
+
+      <div class="r-title">◈ PROTOCOL BREAKDOWN</div>
+      <div class="ip-table" id="protoBreakdown"></div>
+
+      <div class="r-title">◈ TOP ATTACKER IPs</div>
+      <div class="ip-table" id="topIPs"></div>
+
+      <div class="r-title">◈ RECENT ALERTS</div>
+      <div style="flex:1;overflow-y:auto;padding:8px 14px;" id="alertFeed"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────────────────────────
+const socket = io();
+let allLogs = [], currentFilter = 'all', protocols = {}, bannerPresets = {};
+let critCount = 0, uniqueIPs = new Set(), activityBuckets = new Array(60).fill(0);
+let currentBannerProto = '';
+let lastActivity = Date.now();
+
+const PROTO_COLORS = {http:'#00e5ff',ftp:'#a855f7',ssh:'#00ff88',snmp:'#ffcc00',smb:'#ff3d71',telnet:'#ff8c00',smtp:'#64b5f6'};
+
+// ─── CLOCK ───────────────────────────────────────────────────────────────────
+function updateClock(){
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    [now.getHours(),now.getMinutes(),now.getSeconds()].map(n=>String(n).padStart(2,'0')).join(':');
+}
+setInterval(updateClock,1000); updateClock();
+
+// ─── SOCKET EVENTS ───────────────────────────────────────────────────────────
+socket.on('connect',()=>{});
+socket.on('status',d=>updateProtocols(d.protocols));
+socket.on('protocol_status',({proto,status})=>{
+  if(protocols[proto]) protocols[proto].status=status;
+  renderProtocols();
+});
+socket.on('init_logs',logs=>{
+  allLogs=logs.reverse();
+  renderLogs();
+  logs.forEach(l=>{uniqueIPs.add(l.ip);if(l.severity==='CRITICAL')critCount++;});
+  updateStats();
+});
+socket.on('new_log',log=>{
+  allLogs.unshift(log);
+  if(allLogs.length>2000)allLogs.pop();
+  uniqueIPs.add(log.ip);
+  if(log.severity==='CRITICAL')critCount++;
+  activityBuckets[activityBuckets.length-1]++;
+  addLogEntry(log);
+  updateStats();
+  if(log.severity==='CRITICAL'||log.severity==='HIGH')showAlert(log);
+});
+socket.on('stats_update',d=>{
+  updateBreakdown(d.counts);
+  updateTopIPs(d.top_ips);
+});
+socket.on('logs_cleared',()=>{
+  allLogs=[];critCount=0;uniqueIPs.clear();
+  document.getElementById('logFeed').innerHTML='';
+  document.getElementById('alertFeed').innerHTML='';
+  updateStats();
+});
+
+// ─── PROTOCOLS ───────────────────────────────────────────────────────────────
+function updateProtocols(data){
+  protocols=data;
+  renderProtocols();
+  const active=Object.values(data).filter(p=>p.status==='running').length;
+  document.getElementById('statActive').textContent=active;
+  document.getElementById('activeProtos').textContent=active+' PROTOCOLS ACTIVE';
+}
+
+function renderProtocols(){
+  const list=document.getElementById('protoList');
+  list.innerHTML='';
+  const order=['http','ftp','ssh','snmp','smb','telnet','smtp'];
+  order.forEach(proto=>{
+    const p=protocols[proto]; if(!p)return;
+    const div=document.createElement('div');
+    div.className=`proto-card ${p.status}`;
+    div.id=`proto-card-${proto}`;
+    div.innerHTML=`
+      <div class="pc-header">
+        <span class="pc-name pc-${proto}">${proto.toUpperCase()}</span>
+        <span class="pc-port">:${p.port}</span>
+      </div>
+      <div class="pc-status ${p.status}">${p.status==='running'?'◉ LISTENING':'◌ OFFLINE'}</div>
+      <div class="pc-banner" title="${escHtml(p.banner)}">${escHtml(p.banner.substring(0,40))}...</div>
+      <div class="pc-controls">
+        ${p.status==='running'
+          ? `<button class="pc-btn stop" onclick="toggleProto('${proto}','stop')">■ STOP</button>`
+          : `<button class="pc-btn start" onclick="toggleProto('${proto}','start')">▶ START</button>`}
+        <button class="pc-btn banner-btn" onclick="openBannerModal('${proto}')">◈ BANNER</button>
+      </div>`;
+    list.appendChild(div);
+  });
+}
+
+async function toggleProto(proto,action){
+  const r=await fetch('/api/protocol/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({protocol:proto,action})});
+  const d=await r.json();
+  if(d.ok){
+    if(protocols[proto]) protocols[proto].status=d.status;
+    renderProtocols();
+    const active=Object.values(protocols).filter(p=>p.status==='running').length;
+    document.getElementById('statActive').textContent=active;
+    document.getElementById('activeProtos').textContent=active+' PROTOCOLS ACTIVE';
+  }
+}
+
+async function toggleAll(action){
+  const protos=['http','ftp','ssh','snmp','smb','telnet','smtp'];
+  for(const p of protos) await toggleProto(p,action);
+}
+
+// ─── BANNER MODAL ─────────────────────────────────────────────────────────────
+async function openBannerModal(proto){
+  currentBannerProto=proto;
+  document.getElementById('bannerProtoName').textContent=proto.toUpperCase();
+  document.getElementById('bannerInput').value=protocols[proto]?.banner||'';
+  // Load presets
+  if(!Object.keys(bannerPresets).length){
+    const r=await fetch('/api/banners/presets');
+    bannerPresets=await r.json();
+  }
+  const list=document.getElementById('presetList');
+  list.innerHTML='';
+  (bannerPresets[proto]||[]).forEach(p=>{
+    const div=document.createElement('div');
+    div.className='preset-item';
+    div.innerHTML=`<div class="pi-label">${escHtml(p.label)}</div><div class="pi-val">${escHtml(p.value)}</div>`;
+    div.onclick=()=>{document.getElementById('bannerInput').value=p.value;};
+    list.appendChild(div);
+  });
+  document.getElementById('bannerModal').classList.add('open');
+}
+function closeBannerModal(){document.getElementById('bannerModal').classList.remove('open');}
+async function saveBanner(){
+  const banner=document.getElementById('bannerInput').value.trim();
+  if(!banner)return;
+  await fetch('/api/protocol/banner',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({protocol:currentBannerProto,banner})});
+  if(protocols[currentBannerProto]) protocols[currentBannerProto].banner=banner;
+  renderProtocols();
+  closeBannerModal();
+  showToast('MEDIUM',`Banner updated for ${currentBannerProto.toUpperCase()}`);
+}
+
+// ─── LOG RENDERING ────────────────────────────────────────────────────────────
+function addLogEntry(log,prepend=true){
+  if(currentFilter!=='all'&&log.proto_key!==currentFilter) return;
+  const feed=document.getElementById('logFeed');
+  const el=createLogEl(log);
+  el.classList.add('new');
+  if(prepend) feed.insertBefore(el,feed.firstChild);
+  else feed.appendChild(el);
+  // Keep max 500 rows
+  while(feed.children.length>500) feed.removeChild(feed.lastChild);
+  document.getElementById('logCount').textContent=`${feed.children.length} events`;
+}
+
+function createLogEl(log){
+  const div=document.createElement('div');
+  div.className='log-entry';
+  div.innerHTML=`
+    <span class="le-time">${log.time_fmt||log.timestamp?.slice(11,19)||''}</span>
+    <span class="le-sev ${log.severity}">${log.severity}</span>
+    <span class="le-proto ${log.proto_key}">${log.protocol}</span>
+    <span class="le-msg"><span style="color:var(--dim)">${escHtml(log.ip)}:${log.port}</span> ${escHtml(log.message)}</span>`;
+  return div;
+}
+
+function renderLogs(){
+  const feed=document.getElementById('logFeed');
+  feed.innerHTML='';
+  const filtered=currentFilter==='all'?allLogs:allLogs.filter(l=>l.proto_key===currentFilter);
+  filtered.slice(0,300).forEach(l=>addLogEntry(l,false));
+}
+
+function setFilter(filter,btn){
+  currentFilter=filter;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderLogs();
+}
+
+// ─── STATS ────────────────────────────────────────────────────────────────────
+function updateStats(){
+  document.getElementById('statTotal').textContent=allLogs.length;
+  document.getElementById('statIPs').textContent=uniqueIPs.size;
+  document.getElementById('statCrit').textContent=critCount;
+  document.getElementById('totalHits').textContent=allLogs.length+' TOTAL HITS';
+}
+
+function updateBreakdown(counts){
+  const el=document.getElementById('protoBreakdown');
+  el.innerHTML='';
+  const protos=['http','ftp','ssh','snmp','smb','telnet','smtp'];
+  const max=Math.max(...protos.map(p=>counts[p]||0),1);
+  protos.forEach(proto=>{
+    const n=counts[proto]||0;
+    const pct=Math.round((n/max)*100);
+    const row=document.createElement('div');
+    row.className='ip-row';
+    row.innerHTML=`<span class="le-proto ${proto}" style="width:50px">${proto.toUpperCase()}</span>
+      <div style="flex:1"><div class="ip-bar" style="width:${pct}%;background:${PROTO_COLORS[proto]};opacity:.7;"></div></div>
+      <span class="ip-count" style="color:${PROTO_COLORS[proto]}">${n}</span>`;
+    el.appendChild(row);
+  });
+}
+
+function updateTopIPs(ips){
+  const el=document.getElementById('topIPs');
+  el.innerHTML='';
+  const max=ips[0]?.count||1;
+  ips.slice(0,8).forEach(({ip,count})=>{
+    const pct=Math.round((count/max)*100);
+    const row=document.createElement('div');
+    row.className='ip-row';
+    row.innerHTML=`<span class="ip-addr">${escHtml(ip)}</span>
+      <div style="flex:1"><div class="ip-bar" style="width:${pct}%"></div></div>
+      <span class="ip-count">${count}</span>`;
+    el.appendChild(row);
+  });
+}
+
+// ─── ALERT FEED ───────────────────────────────────────────────────────────────
+function showAlert(log){
+  const feed=document.getElementById('alertFeed');
+  const el=document.createElement('div');
+  el.style.cssText=`padding:6px 0;border-bottom:1px solid rgba(13,45,85,.4);`;
+  el.innerHTML=`<div style="font-size:9px;color:var(--dim)">${log.time_fmt}</div>
+    <div style="color:${log.severity==='CRITICAL'?'var(--accent2)':'var(--warn)'};font-size:10px">[${log.severity}] ${log.protocol}</div>
+    <div style="color:var(--bright);font-size:10px">${escHtml(log.ip)}: ${escHtml(log.message.substring(0,60))}</div>`;
+  feed.insertBefore(el,feed.firstChild);
+  while(feed.children.length>30) feed.removeChild(feed.lastChild);
+}
+
+// ─── TOAST ────────────────────────────────────────────────────────────────────
+function showToast(sev,msg){
+  const area=document.getElementById('toastArea');
+  const t=document.createElement('div');
+  t.className=`toast ${sev}`;
+  t.textContent=`[${sev}] ${msg}`;
+  area.appendChild(t);
+  setTimeout(()=>t.remove(),4000);
+}
+
+// ─── EXPORT / CLEAR ───────────────────────────────────────────────────────────
+function exportLogs(fmt){window.location.href=`/api/logs/export?format=${fmt}`;}
+async function clearLogs(){
+  if(!confirm('Clear all logs?'))return;
+  await fetch('/api/logs/clear',{method:'POST'});
+}
+
+// ─── MINI CHART ───────────────────────────────────────────────────────────────
+function updateMiniChart(){
+  const el=document.getElementById('miniChart');
+  el.innerHTML='';
+  const max=Math.max(...activityBuckets,1);
+  activityBuckets.slice(-20).forEach((v,i)=>{
+    const wrap=document.createElement('div');wrap.className='bar-wrap';
+    const bar=document.createElement('div');bar.className='bar';
+    const h=Math.max(2,Math.round((v/max)*60));
+    bar.style.height=h+'px';
+    bar.style.opacity=0.4+((i/20)*0.6);
+    wrap.appendChild(bar);
+    el.appendChild(wrap);
+  });
+}
+
+// Roll buckets every second
+setInterval(()=>{
+  activityBuckets.push(0);
+  if(activityBuckets.length>60)activityBuckets.shift();
+  updateMiniChart();
+  socket.emit('request_stats');
+},1000);
+
+// ─── GLOBE / RADAR ANIMATION ─────────────────────────────────────────────────
+(function initGlobe(){
+  const canvas=document.getElementById('globeCanvas');
+  const container=canvas.parentElement;
+  let W,H;
+  function resize(){W=canvas.width=container.clientWidth;H=canvas.height=container.clientHeight;}
+  resize();window.addEventListener('resize',resize);
+  const ctx=canvas.getContext('2d');
+  const cx=()=>W/2,cy=()=>H/2;
+  const R=()=>Math.min(W,H)*0.35;
+  let angle=0,threats=[];
+  function addThreat(){
+    const a=Math.random()*Math.PI*2;
+    const r=R()*(0.3+Math.random()*0.7);
+    threats.push({x:cx()+Math.cos(a)*r,y:cy()+Math.sin(a)*r,age:0,maxAge:80,color:Math.random()<0.3?'#ff3d71':Math.random()<0.5?'#ffcc00':'#00e5ff'});
+  }
+  setInterval(addThreat,800);
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    // Globe rings
+    for(let i=1;i<=4;i++){
+      ctx.beginPath();
+      ctx.arc(cx(),cy(),R()*i*0.28,0,Math.PI*2);
+      ctx.strokeStyle=`rgba(0,229,255,${0.04+i*0.015})`;
+      ctx.lineWidth=1;ctx.stroke();
+    }
+    // Rotating sweep
+    const sweepLen=Math.PI/2;
+    const grad=ctx.createConicalGradient?null:null;
+    ctx.save();ctx.translate(cx(),cy());ctx.rotate(angle);
+    const sg=ctx.createLinearGradient(0,0,R(),0);
+    sg.addColorStop(0,'rgba(0,229,255,0)');
+    sg.addColorStop(0.7,'rgba(0,229,255,0.12)');
+    sg.addColorStop(1,'rgba(0,229,255,0.25)');
+    ctx.beginPath();
+    ctx.moveTo(0,0);
+    ctx.arc(0,0,R(),0,sweepLen);
+    ctx.closePath();
+    ctx.fillStyle=sg;ctx.fill();
+    // Sweep line
+    ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(R(),0);
+    ctx.strokeStyle='rgba(0,229,255,0.6)';ctx.lineWidth=1.5;ctx.stroke();
+    ctx.restore();
+    // Cross-hairs
+    ctx.strokeStyle='rgba(0,229,255,0.08)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(cx()-R(),cy());ctx.lineTo(cx()+R(),cy());ctx.stroke();
+    ctx.beginPath();ctx.moveTo(cx(),cy()-R());ctx.lineTo(cx(),cy()+R());ctx.stroke();
+    // Threat blips
+    threats=threats.filter(t=>{
+      t.age++;
+      const a=1-(t.age/t.maxAge);
+      const pulse=Math.sin(t.age*0.3)*2;
+      ctx.beginPath();ctx.arc(t.x,t.y,3+pulse,0,Math.PI*2);
+      ctx.fillStyle=t.color.replace(')',`,${a})`).replace('rgb','rgba').replace('#','rgba(').replace(/([0-9a-f]{2})/gi,(m,h)=>parseInt(h,16)+',').replace(/,$/,','+a+')')||t.color;
+      // Simple color with alpha
+      ctx.fillStyle=t.color+'99';
+      ctx.fill();
+      ctx.beginPath();ctx.arc(t.x,t.y,6+pulse*2,0,Math.PI*2);
+      ctx.strokeStyle=t.color+'33';ctx.lineWidth=1;ctx.stroke();
+      return t.age<t.maxAge;
+    });
+    // Center dot
+    ctx.beginPath();ctx.arc(cx(),cy(),3,0,Math.PI*2);
+    ctx.fillStyle='var(--accent)';ctx.fill();
+    angle+=0.012;
+    requestAnimationFrame(draw);
+  }
+  draw();
+  // Update radar status
+  setInterval(()=>{
+    const msgs=['SCANNING NETWORK...','THREAT ANALYSIS ACTIVE','MONITORING PROTOCOLS','DEEP PACKET INSPECTION','FINGERPRINT ANALYSIS'];
+    document.getElementById('radarStatus').textContent=msgs[Math.floor(Math.random()*msgs.length)];
+  },3000);
+})();
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+function escHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+// ─── INITIAL LOAD ─────────────────────────────────────────────────────────────
+(async function init(){
+  const r=await fetch('/api/status');
+  const d=await r.json();
+  updateProtocols(d.protocols);
+  const lr=await fetch('/api/logs?limit=200');
+  const logs=await lr.json();
+  allLogs=logs;
+  logs.forEach(l=>{uniqueIPs.add(l.ip);if(l.severity==='CRITICAL')critCount++;});
+  renderLogs();updateStats();
+  const sr=await fetch('/api/stats');
+  const stats=await sr.json();
+  updateBreakdown(stats.counts);
+  updateTopIPs(stats.top_ips);
+})();
+</script>
+</body>
+</html>
